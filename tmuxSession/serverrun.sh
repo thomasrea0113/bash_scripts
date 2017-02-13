@@ -1,35 +1,31 @@
 #!/bin/bash
 
-required="00"
+provided="00000"
 
-dir=$(pwd)
 logloc="/tmp/"
 funct="s"
 
 while getopts ":t:c:s:l:f:" opt; do
 	case $opt in
 		t)
-			sname=$OPTARG
-			required=$(echo $required | sed s/./1/1)
+			sname=$(echo $OPTARG | sed 's/[^a-zA-Z0-9_]//g')
+			provided=$(echo $provided | sed s/./1/1)
 			;;
 		c)
-			dir="$OPTARG"
-			if ! [[ $dir == *"/" ]]; then
-				dir=$dir"/"
-			fi		
+			dir=$(readlink -fn "$OPTARG")
+			provided=$(echo $provided | sed s/./1/2)
 			;;
 		s)
-			script=$OPTARG
-			required=$(echo $required | sed s/./1/2)
+			script=$(readlink -fn $OPTARG)
+			provided=$(echo $provided | sed s/./1/3)
 			;;
 		l)
-			logloc="$OPTARG"
-			if ! [[ $logloc == *"/" ]]; then
-				logloc=$logloc"/"
-			fi		
+			logloc=$(readlink -fn "$OPTARG")
+			provided=$(echo $provided | sed s/./1/4)
 			;;
 		f)
-			funct=$OPTARG
+			funct=$(echo $OPTARG | sed 's/[^a-zA-Z0-9_]//g')
+			provided=$(echo $provided | sed s/./1/5)
 			;;
 		\?)
 			echo "Invalid option: -$OPTARG." >&2
@@ -41,11 +37,14 @@ while getopts ":t:c:s:l:f:" opt; do
 	esac
 done
 
-if [ $required != "11" ]; then
+if ! [[ $provided =~ 1[01]1[01][01] ]]; then
 	echo "Options -t and -s is required."
 	exit 1
 fi
 
+if ! [[ -v dir ]]; then
+	dir=$(echo $script | sed 's/\/[^\/]*$//g')
+fi
 
 if tmux has-session -t test &>/dev/null; then
 	tmux kill-session -t test
@@ -64,9 +63,9 @@ rm -f $stdinlog
 rm -f $stdoutlog
 rm -f $stderrlog
 
-tmux new-session -ds $sname -c $dir bash -c "$script 2> >(tee $stderrlog >$fifo) | tee $stdoutlog; tmux kill-session -t $sname"
+tmux new-session -ds $sname -n $sname -c $dir bash -c "$script 2> >(tee $stderrlog >$fifo) | tee $stdoutlog; tmux kill-session -t $sname"
 tmux split-window -ht $sname.0
-tmux send-keys -t $sname.1 "$funct(){ tmux send-keys -t $sname.0 \"\$(echo \"\${@:1}\" | tee -a $stdinlog)\" ENTER; }" ENTER 'clear' ENTER
+tmux send-keys -t $sname.1 "$funct(){ tmux send-keys -t $sname.0 \"\$(echo \"\${@:1}\" | tee -a $stdinlog)\" ENTER; }" ENTER "cd $dir" ENTER 'clear' ENTER
 tmux split-window -t $sname.0 cat $fifo
 
 sleep 1
