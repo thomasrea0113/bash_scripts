@@ -1,5 +1,10 @@
 #!/bin/bash
 
+echo $1
+echo $2
+echo $3
+
+
 Y=""
 while [ "$Y" != "abc" ]; do
 	echo "doing..."

@@ -1,11 +1,11 @@
 #!/bin/bash
 
-provided="000000"
+provided="00000"
 
 logloc="/tmp/"
 funct="s"
 
-while getopts ":t:c:s:l:f:ap:" opt; do
+while getopts ":t:c:l:f:a" opt; do
 	case $opt in
 		t)
 			sname=$(echo $OPTARG | sed 's/[^a-zA-Z0-9_]//g')
@@ -14,10 +14,6 @@ while getopts ":t:c:s:l:f:ap:" opt; do
 		c)
 			dir=$(readlink -fn "$OPTARG")"/"
 			provided=$(echo $provided | sed s/./1/2)
-			;;
-		s)
-			script=$(readlink -fn $OPTARG)
-			provided=$(echo $provided | sed s/./1/3)
 			;;
 		l)
 			logloc=$(readlink -fn "$OPTARG")"/"
@@ -41,10 +37,16 @@ while getopts ":t:c:s:l:f:ap:" opt; do
 	esac
 done
 
-if ! [[ $provided =~ 1[01]1[01][01][01] ]]; then
-	echo "Options -t and -s is required."
+if ! [[ $provided =~ 1[01][01][01][01] ]]; then
+	echo "Options -t is required."
 	exit 1
 fi
+
+shift $(expr $OPTIND - 1)
+
+script=$(readlink -fn $1)
+shift 1
+com="$script $@"
 
 if ! [[ -v dir ]]; then
 	dir=$(echo $script | sed 's/\/[^\/]*$//g')
@@ -67,8 +69,7 @@ trap "rm -f $fifo" EXIT
 rm -f $stdinlog
 rm -f $stdoutlog
 rm -f $stderrlog
-
-echo $(tmux new-session -dPs $sname -n $sname -F '#{pane_pid}' -c $dir bash -c "$script 2> >(tee $stderrlog >$fifo) | tee $stdoutlog; tmux kill-session -t $sname") >$pidlog
+echo $(tmux new-session -dPs $sname -n $sname -F '#{pane_pid}' -c $dir bash -c "$com  2> >(tee $stderrlog >$fifo) | tee $stdoutlog; tmux kill-session -t $sname") >$pidlog
 tmux split-window -ht $sname.0
 tmux send-keys -t $sname.1 "$funct(){ tmux send-keys -t $sname.0 \"\$(echo \"\${@:1}\" | tee -a $stdinlog)\" ENTER; }" ENTER "cd $dir" ENTER 'clear' ENTER
 tmux split-window -t $sname.0 cat $fifo
